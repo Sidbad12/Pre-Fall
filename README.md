@@ -2,16 +2,6 @@
 
 Code behind the paper "PreFall-Net" (JIST-2340). It turns raw waist-worn accelerometer and gyroscope signals into a short-lead **pre-impact fall warning**, and tests how far that result holds on other datasets.
 
-## Why are there so many files?
-
-The paper is not one experiment but about twenty small ones, each answering one question a reviewer could ask (is the result real? is it only the dataset? how many false alarms? does a second stage help?). Each question has its own short script. They are kept separate on purpose:
-
-- every script does **one job** and writes its result to a named CSV/JSON file, so a number in the paper can be traced to one script and one file;
-- the slow step (turning raw signals into windowed features) is done **once** by `prefall_v3c.py`, which saves a cache (`windows_cache.pkl`); every later script reads that cache, so you never repeat it;
-- the external-dataset scripts need data you must download yourself, so they live apart from the SisFall-only scripts.
-
-You do **not** need to run everything. Start with the main script; run the others only for the result you want to reproduce.
-
 ## Setup
     pip install numpy scipy pandas scikit-learn openpyxl
     export SISFALL_ROOT=/path/to/SisFall_dataset      # SisFall is public; download it separately
@@ -56,12 +46,6 @@ Run all commands from the repository root. Datasets are not included.
 
 ## Reading the result files
 Outputs named `itemN_*` are the numbered result tables behind the paper. For example `item4` gives the activities with the most false alarms and `item5` the sensitivity by fall type.
-
-## Things to know
-- **Folder layout.** Several scripts read or write fixed relative folders (`real_v5/`, `analysis_causal/`, `cross_out/`, `uma_out/`). Run `prefall_v3c.py` first and keep these folders at the repository root. Paths for external datasets are set at the top of each script.
-- **Order.** `analysis/alarm_work.py` writes the cached alarm scores that `alarm_eval.py` and the `second_stage/` scripts read, so run it before them.
-- **FallAllD axis mapping** was chosen after a diagnostic scan (see manuscript Section 3.10).
-- The docstring at the top of `prefall_v3c.py` is the original design note; the command above is the current usage.
 
 ## Licence
 MIT (see `LICENSE`).
