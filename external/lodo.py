@@ -1,10 +1,11 @@
+import os
 import sys, os; sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import pandas as pd, numpy as np, pickle, itertools, json
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import roc_auc_score
 names=pickle.load(open("ltmm_pack/ltmm_model.pkl","rb"))["names"]
 sf=pd.read_pickle("real_v5/windows_cache.pkl"); kf=pd.read_pickle("cross_out/kfall_windows.pkl")
-fa=pd.read_pickle("/mnt/user-data/attachments/00b75448-56f8-5f32-aeca-f81a4ffd487f/9fc432f4-fallalld_feats.pkl")
+fa=pd.read_pickle(os.environ.get("FALLALLD_FEATS","fallalld_feats.pkl"))
 fa=fa.rename(columns={"fall":"is_fall"}); fa["pos"]=fa.is_fall; fa["adl"]=1-fa.is_fall; fa["train_neg"]=fa.adl
 D={}
 for n,d in (("SisFall",sf),("KFall",kf),("FallAllD",fa)):

@@ -1,21 +1,67 @@
-# PreFall-Net
+# PreFall-Net: pre-impact fall warning from a waist-worn inertial sensor
 
-Code for "PreFall-Net: pre-impact fall warning from a waist-worn inertial sensor" (JIST-2340).
+Code behind the paper "PreFall-Net" (JIST-2340). It turns raw waist-worn accelerometer and gyroscope signals into a short-lead **pre-impact fall warning**, and tests how far that result holds on other datasets.
+
+## Why are there so many files?
+
+The paper is not one experiment but about twenty small ones, each answering one question a reviewer could ask (is the result real? is it only the dataset? how many false alarms? does a second stage help?). Each question has its own short script. They are kept separate on purpose:
+
+- every script does **one job** and writes its result to a named CSV/JSON file, so a number in the paper can be traced to one script and one file;
+- the slow step (turning raw signals into windowed features) is done **once** by `prefall_v3c.py`, which saves a cache (`windows_cache.pkl`); every later script reads that cache, so you never repeat it;
+- the external-dataset scripts need data you must download yourself, so they live apart from the SisFall-only scripts.
+
+You do **not** need to run everything. Start with the main script; run the others only for the result you want to reproduce.
 
 ## Setup
-    pip install numpy scipy pandas scikit-learn
+    pip install numpy scipy pandas scikit-learn openpyxl
     export SISFALL_ROOT=/path/to/SisFall_dataset      # SisFall is public; download it separately
+    mkdir -p real_v5 analysis_causal analysis_causal/alarm
+Run all commands from the repository root. Datasets are not included.
 
-## Layout
-- `prefall_v3c.py` - main pipeline: causal filter, Madgwick global frame, 2 s windows, 22 features, baselines, subject-wise 10-fold CV. `--synthetic` runs a smoke test without data.
-- `analysis/` - nested CV, paired/bootstrap tests, alarm-rate analysis, operating-point reconciliation, feature-group ablations (paper Sections 3.1 to 3.9).
-- `external/` - KFall transfer, UMAFall placement, LTMM free-living false alarms, FallAllD evaluation, pooled leave-one-dataset-out training (Sections 3.10 to 3.12). These need KFall, UMAFall, LTMM and FallAllD downloaded separately; paths are set at the top of each script.
-- `second_stage/` - impact-plus-stillness confirmation, stage-2-alone and activity-aware rules (Section 3.13). `two_stage.py` builds `mag_cache.pkl` on first run.
+## Step 1: the main pipeline (start here)
+    python prefall_v3c.py --sisfall $SISFALL_ROOT --out real_v5
+    python prefall_v3c.py --synthetic        # quick smoke test, no data needed
 
-## Notes
-- Several analysis scripts read intermediate files written by earlier ones (for example `analysis_causal/alarm/all_scores.pkl`); run `prefall_v3c.py` and `analysis/alarm_work.py` first.
-- FallAllD axis mapping was chosen after a diagnostic (see manuscript Section 3.10).
-- Datasets are not redistributed.
+`prefall_v3c.py` does the core method: causal 4th-order Butterworth 5 Hz low-pass filter, Madgwick orientation filter in a gravity-referenced frame, 2 s windows every 0.5 s, 22 features, gradient boosting and the baselines, evaluated with subject-wise 10-fold cross-validation. It writes the headline tables, a `windows_cache.pkl` and a results workbook into `--out`. Most other scripts read `real_v5/windows_cache.pkl`.
+
+## Step 2: what each other script does
+
+### `analysis/` - SisFall deep-dives (paper Sections 3.1 to 3.9)
+| Script | What it does | Main output |
+|---|---|---|
+| `prefall_analysis_c.py` | Shared analysis code: extra model types, baselines, held-out subjects, nested thresholds | baselines, alarms per hour, permutation importance, deployability |
+| `nested_cv.py`, `nested_eval.py` | Model selection inside the training folds only, then compared with the fixed model | `item15_*` |
+| `boot_paired.py`, `boot_all2000.py`, `boot_nn.py` | Paired subject-level bootstrap tests and confidence intervals | `item9*`, `item18*` |
+| `extra_checks.py` | Warning-time percentiles and the sensitivity versus alarms-per-hour curve | `item11`, `item12` |
+| `reconcile.py` | Pooled-quantile operating-point curve and reconciliation with the per-fold threshold | `item16*` |
+| `alarm_work.py`, `alarm_eval.py` | False alarms per ADL hour, young versus elderly, alarm variants | `item19*` |
+| `f21_ablation.py`, `run_ablate_c.py` | Removing feature groups to see what each contributes | `item13`, `ablate_causal.csv` |
+
+### `external/` - other datasets (Sections 3.10 to 3.12; each needs its dataset downloaded)
+| Script | What it does |
+|---|---|
+| `prefall_cross.py` | SisFall to KFall and KFall to SisFall transfer |
+| `prefall_uma.py`, `uma_common.py`, `uma_wrist_paired.py` | UMAFall: waist, wrist, chest, ankle placement and the paired waist-plus-wrist test |
+| `train_ltmm_model.py` | Trains the 19-feature model used to count false alarms on LTMM older adults (no falls in that dataset) |
+| `fallalld_eval.py` | FallAllD evaluation (waist logger), with the axis-mapping diagnostic. Ran on Kaggle; paths are at the top |
+| `lodo.py` | Pooled leave-one-dataset-out training across SisFall, KFall and FallAllD. Set `FALLALLD_FEATS` to the saved FallAllD feature file |
+
+### `second_stage/` - the impact-confirmation stage (Section 3.13)
+| Script | What it does | Main output |
+|---|---|---|
+| `export_raw.py` | Exports the raw acceleration magnitude per trial | `mag_cache.pkl` |
+| `two_stage.py` | Impact-plus-stillness confirmation of a stage-1 alarm | `item22_two_stage_folds.csv` |
+| `stage2_alone.py` | The same check used on its own, without stage 1 | `item22_stage2_alone.csv` |
+| `activity_gate.py`, `activity_thr.py` | Activity-aware rules (motion gate, per-state thresholds); a negative result | `item21_*` |
+
+## Reading the result files
+Outputs named `itemN_*` are the numbered result tables behind the paper. For example `item4` gives the activities with the most false alarms and `item5` the sensitivity by fall type.
+
+## Things to know
+- **Folder layout.** Several scripts read or write fixed relative folders (`real_v5/`, `analysis_causal/`, `cross_out/`, `uma_out/`). Run `prefall_v3c.py` first and keep these folders at the repository root. Paths for external datasets are set at the top of each script.
+- **Order.** `analysis/alarm_work.py` writes the cached alarm scores that `alarm_eval.py` and the `second_stage/` scripts read, so run it before them.
+- **FallAllD axis mapping** was chosen after a diagnostic scan (see manuscript Section 3.10).
+- The docstring at the top of `prefall_v3c.py` is the original design note; the command above is the current usage.
 
 ## Licence
 MIT (see `LICENSE`).
