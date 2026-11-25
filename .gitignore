@@ -1,0 +1,4 @@
+__pycache__/
+*.pkl
+results_v3/
+mag_cache.pkl
