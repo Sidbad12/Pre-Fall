@@ -49,9 +49,9 @@ Run all commands from the repository root. Datasets are not included.
 ### `second_stage/` - the impact-confirmation stage (Section 3.13)
 | Script | What it does | Main output |
 |---|---|---|
-| `export_raw.py` | Exports the raw acceleration magnitude per trial | `mag_cache.pkl` |
-| `two_stage.py` | Impact-plus-stillness confirmation of a stage-1 alarm | `item22_two_stage_folds.csv` |
-| `stage2_alone.py` | The same check used on its own, without stage 1 | `item22_stage2_alone.csv` |
+| `two_stage.py` | Impact-plus-stillness confirmation of a stage-1 alarm. Builds `mag_cache.pkl` (raw acceleration magnitude per trial) on first run | `item22_two_stage_folds.csv` |
+| `stage2_alone.py` | The same check used on its own, without stage 1. Run after `two_stage.py` because it reads `mag_cache.pkl` | `item22_stage2_alone.csv` |
+| `export_raw.py` | Exports 50 Hz raw-signal windows for the deep-learning baselines (CNN/GRU), which were trained on Kaggle | `kaggle_pack/` |
 | `activity_gate.py`, `activity_thr.py` | Activity-aware rules (motion gate, per-state thresholds); a negative result | `item21_*` |
 
 ## Reading the result files
